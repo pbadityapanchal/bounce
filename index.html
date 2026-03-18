@@ -6,7 +6,7 @@
 <title>NEON RUSH — Endless Runner</title>
 <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-BP1FJE13QK"></script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-BP1FJE13QK"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
@@ -25,7 +25,8 @@
   }
 </script>
   
-<style>
+  
+  <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%;overflow:hidden;background:#04060f;
   font-family:'Exo 2',sans-serif;touch-action:none;
@@ -36,7 +37,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#04060f;
 /* HUD */
 #hud{position:fixed;top:0;left:0;right:0;z-index:10;pointer-events:none;
   display:flex;justify-content:space-between;align-items:flex-start;
-  padding:10px 14px;gap:8px;}
+  padding:56px 14px 10px;gap:8px;}
 .hp{background:rgba(8,13,30,.78);border:1px solid rgba(0,229,255,.22);
   backdrop-filter:blur(12px);border-radius:40px;padding:5px 16px;
   display:flex;flex-direction:column;align-items:center;}
@@ -135,11 +136,67 @@ html,body{width:100%;height:100%;overflow:hidden;background:#04060f;
 #kbhint{position:fixed;bottom:7px;left:0;right:0;text-align:center;
   font-family:'Share Tech Mono',monospace;font-size:clamp(8px,1.4vw,11px);
   letter-spacing:3px;color:rgba(255,255,255,.2);z-index:5;pointer-events:none;}
+
+/* SPEED CONTROL BAR */
+#spdbar{position:fixed;top:0;left:0;right:0;z-index:30;
+  display:flex;align-items:center;justify-content:center;
+  padding:6px 12px;gap:8px;pointer-events:auto;
+  background:rgba(4,6,15,0.0);}
+#spdbar-inner{display:flex;align-items:center;gap:8px;
+  background:rgba(8,13,30,.82);border:1px solid rgba(0,229,255,.22);
+  backdrop-filter:blur(12px);border-radius:40px;
+  padding:5px 14px;}
+.spdbtn{width:clamp(28px,6vw,36px);height:clamp(28px,6vw,36px);
+  border-radius:50%;background:rgba(0,229,255,.1);
+  border:1.5px solid rgba(0,229,255,.38);
+  color:rgba(0,229,255,.9);font-size:clamp(14px,3vw,18px);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;transition:background .08s,transform .08s;
+  user-select:none;-webkit-user-select:none;}
+.spdbtn:active,.spdbtn.on{background:rgba(0,229,255,.28);transform:scale(.91);
+  box-shadow:0 0 12px rgba(0,229,255,.38);}
+#spdslider-wrap{display:flex;align-items:center;gap:6px;}
+#spdslider{-webkit-appearance:none;appearance:none;
+  width:clamp(80px,20vw,180px);height:5px;
+  border-radius:3px;outline:none;cursor:pointer;
+  background:rgba(255,255,255,.1);}
+#spdslider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
+  width:16px;height:16px;border-radius:50%;
+  background:linear-gradient(135deg,#00e5ff,#b45fff);
+  box-shadow:0 0 8px rgba(0,229,255,.6);cursor:pointer;}
+#spdslider::-moz-range-thumb{width:16px;height:16px;border-radius:50%;border:none;
+  background:linear-gradient(135deg,#00e5ff,#b45fff);
+  box-shadow:0 0 8px rgba(0,229,255,.6);cursor:pointer;}
+#spdlbl{font-family:'Share Tech Mono',monospace;font-size:clamp(9px,1.6vw,12px);
+  color:#00e5ff;letter-spacing:1px;min-width:28px;text-align:center;}
+
+/* FULL-SCREEN CLICK/TOUCH ZONES */
+#touch-left,#touch-right{position:fixed;top:56px;bottom:0;z-index:8;
+  pointer-events:auto;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+#touch-left{left:0;width:35%;}
+#touch-right{right:0;width:35%;}
 </style>
 </head>
 <body>
 
 <canvas id="game-canvas"></canvas>
+
+<!-- Full-screen touch zones (left/right) -->
+<div id="touch-left"></div>
+<div id="touch-right"></div>
+
+<!-- SPEED CONTROL BAR -->
+<div id="spdbar">
+  <div id="spdbar-inner">
+    <div class="spdbtn" id="spdbtn-dec">−</div>
+    <div id="spdslider-wrap">
+      <input type="range" id="spdslider" min="0" max="100" value="14" step="1">
+    </div>
+    <div class="spdbtn" id="spdbtn-inc">+</div>
+    <div id="spdlbl">1.0×</div>
+  </div>
+</div>
 
 <!-- HUD -->
 <div id="hud">
@@ -358,6 +415,117 @@ bindBtn('bsu', 'up');
 bindBtn('bsd', 'down');
 bindBtn('bj',  'jump',  ()=> doJump());
 
+// ── Speed Control Bar ─────────────────────────────────────
+const spdSlider  = document.getElementById('spdslider');
+const spdLbl     = document.getElementById('spdlbl');
+const spdbtnDec  = document.getElementById('spdbtn-dec');
+const spdbtnInc  = document.getElementById('spdbtn-inc');
+
+function spdToSlider(s){
+  return Math.round((s - SPD_MIN) / (SPD_MAX - SPD_MIN) * 100);
+}
+function sliderToSpd(v){
+  return SPD_MIN + (v / 100) * (SPD_MAX - SPD_MIN);
+}
+function syncSpdBar(){
+  const v = spdToSlider(spd);
+  spdSlider.value = v;
+  spdLbl.textContent = spd.toFixed(1) + '×';
+}
+
+spdSlider.addEventListener('input', function(){
+  if(state !== ST.PLAY) return;
+  spd = Math.min(SPD_MAX, Math.max(SPD_MIN, sliderToSpd(parseInt(this.value))));
+});
+spdSlider.addEventListener('touchstart', e => e.stopPropagation(), {passive:true});
+spdSlider.addEventListener('touchmove',  e => e.stopPropagation(), {passive:true});
+
+function holdSpd(dir){
+  let iv;
+  function step(){ spd = Math.min(SPD_MAX, Math.max(SPD_MIN, spd + dir*0.08)); syncSpdBar(); }
+  function start(e){ e.preventDefault(); e.stopPropagation(); if(state===ST.PLAY){ step(); iv=setInterval(step,80); } }
+  function stop(e){ e.preventDefault(); clearInterval(iv); }
+  spdbtnDec.addEventListener('mousedown',   dir < 0 ? start : null);
+  spdbtnInc.addEventListener('mousedown',   dir > 0 ? start : null);
+  spdbtnDec.addEventListener('touchstart',  dir < 0 ? start : null, {passive:false});
+  spdbtnInc.addEventListener('touchstart',  dir > 0 ? start : null, {passive:false});
+  return {start, stop};
+}
+(function(){
+  let ivDec, ivInc;
+  function startDec(e){ e.preventDefault(); e.stopPropagation(); if(state===ST.PLAY){ spd=Math.max(SPD_MIN,spd-0.08); syncSpdBar(); ivDec=setInterval(()=>{ spd=Math.max(SPD_MIN,spd-0.08); syncSpdBar(); },80); } }
+  function stopDec(e){ clearInterval(ivDec); }
+  function startInc(e){ e.preventDefault(); e.stopPropagation(); if(state===ST.PLAY){ spd=Math.min(SPD_MAX,spd+0.08); syncSpdBar(); ivInc=setInterval(()=>{ spd=Math.min(SPD_MAX,spd+0.08); syncSpdBar(); },80); } }
+  function stopInc(e){ clearInterval(ivInc); }
+  spdbtnDec.addEventListener('mousedown',  startDec); spdbtnDec.addEventListener('mouseup', stopDec); spdbtnDec.addEventListener('mouseleave', stopDec);
+  spdbtnInc.addEventListener('mousedown',  startInc); spdbtnInc.addEventListener('mouseup', stopInc); spdbtnInc.addEventListener('mouseleave', stopInc);
+  spdbtnDec.addEventListener('touchstart', startDec, {passive:false}); spdbtnDec.addEventListener('touchend', stopDec, {passive:false}); spdbtnDec.addEventListener('touchcancel', stopDec, {passive:false});
+  spdbtnInc.addEventListener('touchstart', startInc, {passive:false}); spdbtnInc.addEventListener('touchend', stopInc, {passive:false}); spdbtnInc.addEventListener('touchcancel', stopInc, {passive:false});
+})();
+
+// ── Full-screen touch/click zones ────────────────────────
+(function(){
+  const tLeft  = document.getElementById('touch-left');
+  const tRight = document.getElementById('touch-right');
+
+  function isBallTouch(clientX, clientY){
+    if(!ball) return false;
+    const horizon = hy();
+    const groundY = horizon + (H - horizon) * BDEPTH;
+    const drawY   = groundY + ball.jy;
+    const bx = ball.x, by = drawY, br = ball.r * 1.5;
+    const dx = clientX - bx, dy = clientY - by;
+    return Math.hypot(dx, dy) < br;
+  }
+
+  // Determine which lane index corresponds to a screen X coordinate
+  function laneFromX(clientX){
+    // Find the lane whose centre X at ball depth is closest to clientX
+    let bestLane = 0, bestDist = Infinity;
+    for(let i = 0; i < LANES; i++){
+      const cx = roadX(lFrac(i), BDEPTH);
+      const d = Math.abs(clientX - cx);
+      if(d < bestDist){ bestDist = d; bestLane = i; }
+    }
+    return bestLane;
+  }
+
+  function handleScreenTouch(clientX, clientY){
+    if(state !== ST.PLAY) return;
+    if(isBallTouch(clientX, clientY)){ doJump(); return; }
+    const targetLane = laneFromX(clientX);
+    if(ball && targetLane !== ball.lane){
+      ball.lane    = targetLane;
+      ball.targetX = roadX(lFrac(targetLane), BDEPTH);
+    }
+  }
+
+  function handleLeft(e){
+    const touch = e.changedTouches ? e.changedTouches[0] : e;
+    handleScreenTouch(touch.clientX, touch.clientY);
+  }
+  function handleRight(e){
+    const touch = e.changedTouches ? e.changedTouches[0] : e;
+    handleScreenTouch(touch.clientX, touch.clientY);
+  }
+
+  tLeft.addEventListener('click',      handleLeft);
+  tRight.addEventListener('click',     handleRight);
+  tLeft.addEventListener('touchstart', e => { e.preventDefault(); handleLeft(e); }, {passive:false});
+  tRight.addEventListener('touchstart',e => { e.preventDefault(); handleRight(e); }, {passive:false});
+
+  // Ball click on canvas center zone
+  cv.addEventListener('click', function(e){
+    if(state !== ST.PLAY) return;
+    handleScreenTouch(e.clientX, e.clientY);
+  });
+  cv.addEventListener('touchstart', function(e){
+    if(state !== ST.PLAY) return;
+    const t = e.changedTouches[0];
+    handleScreenTouch(t.clientX, t.clientY);
+  }, {passive:false});
+})();
+
 // ── Lane movement ─────────────────────────────────────────
 function moveLane(dir){
   if(!ball) return;
@@ -379,11 +547,11 @@ function doJump(){
 
 // ── Obstacles ─────────────────────────────────────────────
 const OTYPES = [
-  {id:'block',  col:'#ff4466',glow:'#ff0033',hw:.055,ww:.17,full:false},
-  {id:'spike',  col:'#ffab40',glow:'#ff7700',hw:.065,ww:.14,full:false},
-  {id:'wall',   col:'#b45fff',glow:'#8800ff',hw:.032,ww:1.0, full:true },
-  {id:'barrier',col:'#00c9a7',glow:'#00ffcc',hw:.052,ww:.19,full:false},
-  {id:'crate',  col:'#f048a0',glow:'#ff0077',hw:.058,ww:.16,full:false},
+  {id:'block',  col:'#ff4466',glow:'#ff0033',hw:.055,ww:.17,full:false,pts:10},
+  {id:'spike',  col:'#ffab40',glow:'#ff7700',hw:.065,ww:.14,full:false,pts:20},
+  {id:'wall',   col:'#b45fff',glow:'#8800ff',hw:.032,ww:1.0, full:true, pts:50},
+  {id:'barrier',col:'#00c9a7',glow:'#00ffcc',hw:.052,ww:.19,full:false,pts:30},
+  {id:'crate',  col:'#f048a0',glow:'#ff0077',hw:.058,ww:.16,full:false,pts:15},
 ];
 const OBS = [];
 let spawnT = 0;
@@ -405,7 +573,7 @@ function spawnObs(){
   OBS.push({
     type:d.id,
     lane:d.full ? 1 : Math.floor(Math.random()*LANES),
-    t:0, pulse:0, scored:false,
+    t:0, pulse:0, scored:false, ballJumped:false,
   });
 }
 
@@ -451,12 +619,17 @@ function hitCheck(){
 }
 
 // ── HUD update ────────────────────────────────────────────
+const _elHs   = document.getElementById('hs');
+const _elHspd = document.getElementById('hspd');
+const _elHd   = document.getElementById('hd');
+const _elSf   = document.getElementById('sfill');
 function hudUpdate(){
-  document.getElementById('hs').textContent   = score.toLocaleString();
-  document.getElementById('hspd').textContent = spd.toFixed(1)+'×';
-  document.getElementById('hd').textContent   = Math.floor(dist)+'m';
+  _elHs.textContent   = String(Math.floor(score));
+  _elHspd.textContent = spd.toFixed(1)+'×';
+  _elHd.textContent   = Math.floor(dist)+'m';
   const pct = ((spd-SPD_MIN)/(SPD_MAX-SPD_MIN)*100).toFixed(1);
-  document.getElementById('sfill').style.width = pct+'%';
+  _elSf.style.width = pct+'%';
+  syncSpdBar();
 }
 
 // ── Screen management ─────────────────────────────────────
@@ -471,12 +644,23 @@ const cpop = document.getElementById('cpop');
 
 function comboCheck(now){
   for(const o of OBS){
+    // During approach: track if ball was in same lane AND jumped
+    if(!o.scored && o.t > BDEPTH-0.25 && o.t < BDEPTH+0.13){
+      const d = OTYPES.find(x => x.id === o.type);
+      const inLane = d.full || (ball && o.lane === ball.lane);
+      if(inLane && ball && !ball.onGround) o.ballJumped = true;
+    }
+    // Award score when obstacle passes ball position
     if(!o.scored && o.t > BDEPTH+0.05 && o.t < BDEPTH+0.13){
       o.scored = true;
-      score += Math.round(12*spd);
-      if(now-lastDodgeTs < 2800){ dodges++; if(dodges>=3) showCombo(dodges); }
-      else dodges = 1;
-      lastDodgeTs = now;
+      if(o.ballJumped){
+        const d = OTYPES.find(x => x.id === o.type);
+        score += d.pts;
+        _elHs.textContent = String(Math.floor(score));
+        if(now-lastDodgeTs < 2800){ dodges++; if(dodges>=3) showCombo(dodges); }
+        else dodges = 1;
+        lastDodgeTs = now;
+      }
     }
   }
 }
@@ -738,7 +922,6 @@ function spdInput(dt){
   const fac = dt/16.67;
   if(K['ArrowUp']   || T.up)   spd = Math.min(SPD_MAX, spd+0.028*fac);
   if(K['ArrowDown'] || T.down) spd = Math.max(SPD_MIN, spd-0.028*fac);
-  spd = Math.min(SPD_MAX, spd+SPD_AUTO*dt);
   if(spd>maxSpd) maxSpd=spd;
 }
 
@@ -749,6 +932,7 @@ function startGame(){
   dodges=0;spawnT=0;roadOff=0;frame=0;
   ball = makeBall();
   resize();
+  syncSpdBar();
   showScreen(null);
   state = ST.PLAY;
   lastT = performance.now();
@@ -791,16 +975,17 @@ function loop(ts){
     if(spawnT>=si){ spawnT=0; spawnObs(); }
 
     dist  += spd*0.048*(dt/16.67);
-    score += Math.round(spd*.28*(dt/16.67));
-
-    comboCheck(ts);
-    if(hitCheck()){ gameOver(); }
+    score += spd*.28*(dt/16.67);
 
     drawRoad(dt);
     drawObs(dt);
     drawBall(dt);
     drawParts(dt);
     drawVignette();
+
+    comboCheck(ts);
+    if(hitCheck()){ gameOver(); return; }
+
     hudUpdate();
 
   } else if(state===ST.DEAD){
